@@ -237,7 +237,14 @@ def get_prefix_list():
 
 	wine_string = wine_string.replace("/drive_c", "")
 	list = wine_string.split("\\n")
-	return list
+	list_final = []
+	for i in range(0, len(list)):
+		if list[i].find("/.directory_history/") >= 0:
+			continue
+
+		list_final.append(list[i])
+
+	return list_final
 
 def get_project_list():
 	bashresult = subprocess.run(["find \"/home/{}\" -type f -name \"*.yyp\" | grep -iv cache".format(system_user)], shell=True,stdout=subprocess.PIPE);
@@ -644,7 +651,7 @@ def curses_main(stdscr):
 				system_project_directory = system_project_path.replace(system_project_name + "yyp", "")
 				output_history.append("project set to {}".format(system_project_name))
 			except:
-				output_history.append("[!] error processing project name (invalid characters?")
+				output_history.append("[!] error processing project name (invalid characters?)")
 		else:
 			output_history.append("[!] no GameMaker projects found!")
 
