@@ -59,7 +59,7 @@ class AsyncRead:
 # Global variables:
 command_list = ["exit", "quit", "print runtimes", "set gm runtime", "set gamemaker runtime", "set debug", "build wine", 
 		"set wine drive", "set wine prefix", "set gamemaker project", "set gm project", "clean wine",
-		"build wine existing", "kill wineserver", "export autoload"]
+		"build wine existing", "kill wineserver", "export autoload", "set gm config", "set gamemaker config"]
 for i in range(0, len(command_list)):
 	command_list.append("help " + command_list[i])
 command_list.append("help")
@@ -79,6 +79,14 @@ system_project_directory = ""
 system_project_path = ""
 system_project_name = ""
 wine_gm_config = "Default"
+wine_gm_config_index = 0
+
+	# GameMaker doesn't follow the JSON spec so we need to remove some
+	# extra commas or else the JSON parser crashes. Could use YAML but... eh.
+def json_strip_dead_commas(string):
+	string = re.sub(",[\\s\\t\\n]*\\}", "}", string)
+	string = re.sub(",[\\s\\t\\n]*\\]", "]", string)
+	return string
 
 # @STUB Wrapper until I find a solution to this problem
 def addstr(stdscr, y, x, str):
@@ -273,7 +281,7 @@ def get_runtime_list():
 	global wine_gm_runtime_path
 
 	if wine_gm_path == "":
-		return [];
+		return []
 
 	bashresult = subprocess.run(["find \"{}\" -name \"runtimes\" | head -1".format(wine_path)],shell=True,stdout=subprocess.PIPE)
 	runtime_path = str(bashresult.stdout)[1:-3] + "'"
@@ -285,6 +293,27 @@ def get_runtime_list():
 	runtime_str = str(bashresult.stdout)[2:-3]
 	list = runtime_str.split("\\n")
 	return list
+
+def get_config_list():
+	global system_project_path
+	if system_project_path == "":
+		return []
+
+	def scan_for_config(scan_list, final_list, prefix=""):
+		for entry in scan_list:
+			final_list.append(prefix + entry["name"])
+			if len(entry["children"]) > 0:
+				scan_for_config(entry["children"], final_list, prefix + entry["name"] + " -> ")
+
+	file = open(system_project_path, "r")
+	content = file.read()
+	file.close()
+	pyobj = json.loads(json_strip_dead_commas(content))
+	scan_list = pyobj["configs"]
+	final_list = []
+
+	scan_for_config([scan_list], final_list)
+	return final_list
 
 def window_select_list(stdscr, titlebar, list, index=0):
 	scroll = 0 # Used if window is too small
@@ -574,6 +603,7 @@ def import_autoload():
 	global wine_gm_debug_mode
 	global wine_local_drive
 	global wine_gm_runtime
+	global wine_gm_config
 	try:
 		file = open("/home/{}/.gmbuild_autoload".format(system_user))
 		content = file.read()
@@ -585,6 +615,7 @@ def import_autoload():
 		wine_gm_runtime = data["rt"]
 		wine_gm_debug_mode = data["debug"]
 		wine_local_drive = data["drive"]
+		wine_gm_config = data["config"]
 	except:
 		return False
 
@@ -600,6 +631,8 @@ def curses_main(stdscr):
 	global system_project_name
 	global system_project_directory
 	global system_project_path
+	global wine_gm_config
+	global wine_gm_config_index
 
 	lastchar = 0
 	inputstr = ""
@@ -676,6 +709,7 @@ def curses_main(stdscr):
 			output_history.append("[!] no GameMaker projects found!")
 
 	if is_autoload:
+		output_history.append("set config to {}".format(wine_gm_config))
 		wine_gm_runtime_index = 0
 		output_history.append("finished performing autoload, to prevent this in the future delete ~/.gmbuild_autoload")
 
@@ -790,6 +824,22 @@ def curses_main(stdscr):
 							wine_gm_runtime_index = window_select_list(stdscr, "set runtime", runtime_list, wine_gm_runtime_index)
 							wine_gm_runtime = runtime_list[wine_gm_runtime_index]
 							output_history.append("GameMaker runtime set to {}".format(wine_gm_runtime))
+				elif get_is_regex_command(inputstr_lower,"set (gm|gamemaker) config"):
+					if is_help:
+						output_history.append("[!] info:")
+						output_history.append("opens a list to select which GameMaker config to compile with")
+					else:
+						config_list = get_config_list()
+						if len(config_list) == 0:
+							output_history.append("[!] no configs found!")
+						else:
+							wine_gm_config_index = window_select_list(stdscr, "set config", config_list, wine_gm_config_index)
+							match_array = re.findall("-> \\w*$", config_list[wine_gm_config_index])
+							if len(match_array) > 0:
+								wine_gm_config = match_array[0][3:]
+							else:
+								wine_gm_config = config_list[wine_gm_config_index]
+							output_history.append("GameMaker config set to {}".format(wine_gm_config))
 				elif get_is_regex_command(inputstr_lower, "set debug"):
 					if is_help:
 						output_history.append("[!] info:")
@@ -891,7 +941,8 @@ def curses_main(stdscr):
 								"rtpath" : wine_gm_runtime_path,
 								"rt" : wine_gm_runtime,
 								"debug" : wine_gm_debug_mode,
-								"drive" : wine_local_drive
+								"drive" : wine_local_drive,
+								"config" : wine_gm_config
 							}
 							file = open("/home/{}/.gmbuild_autoload".format(system_user), "w")
 							file.write(json.dumps(data))
