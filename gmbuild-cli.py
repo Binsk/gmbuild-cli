@@ -14,10 +14,7 @@
 """
 
 # TODO:	Check why the debug flag isn't working
-# TODO:	Add a basic HELP page
-# TODO:	Add a help page for each command
 # TODO:	Test w/ newer runtimes and see if it still works (if not, adjust)
-# TODO:	Add support to change build profiles
 # TODO:	Add support to compile for Linux (from Windows)
 
 import sys,os
@@ -398,6 +395,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 	global wine_gm_runtime
 	is_output_paused = False	# Used to allow reading outputy
 	paused_start_index = 0		# Only print until this index if output is paused
+	compile_start_index = len(output_history)	# Where to start if we dump
 	if use_existing:
 		bashscript = "find \"{}\" -name \"build.bff\" | head -1".format(wine_path)
 		result = subprocess.run([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -497,6 +495,8 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 			hint += " | [P] resume output"
 		else:
 			hint += " | [P] pause output"
+
+		hint += " | [D] dump output"
 		try:
 			addstr(stdscr, height - 1, 0, hint)
 			addstr(stdscr, height - 1, len(hint), " " * (width - len(hint)))
@@ -518,6 +518,17 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 
 		if not is_output_paused:
 			paused_start_index = len(output_history) - 1
+
+		if lastchar == ord('d'):
+			paused_start_index += 1
+			try:
+				file = open("/home/{}/dump.log".format(system_user), "w")
+				log_copy = output_history[compile_start_index:paused_start_index]
+				file.write("\n".join(log_copy))
+				file.close()
+				output_history.insert(paused_start_index, "[!] dumped output to ~/dump.log")
+			except:
+				output_history.insert(paused_start_index, "[!] failed to dump log!")
 
 		# Output history (and thus incoming terminal info):
 		print_history(stdscr, output_history, paused_start_index)
