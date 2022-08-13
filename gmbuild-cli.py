@@ -403,7 +403,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 	bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
 	process = subprocess.Popen([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
-	asyncprocess = AsyncRead(process.stderr)
+	asyncprocess = AsyncRead(process.stdout)
 
 	stdscr.nodelay(True)
 	lastchar = 0
