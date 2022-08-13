@@ -130,13 +130,26 @@ def generate_targetoptions():
 
 def generate_macros():
 	wine_path_mod = wine_path.replace("$USER", system_user, 1)
+
+	gmac_path = ""
+	bashresult = subprocess.run(["find \"{}\" -type f -name \"GMAssetCompiler.exe\" | head -1".format(wine_gm_runtime_path + wine_gm_runtime)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	gmac_path = str(bashresult.stdout)[2:-3]
+
+	runner_path = ""
+	bashresult = subprocess.run(["find \"{}\" -type f -name \"Runner.exe\" | head -2 | grep -v x64".format(wine_gm_runtime_path + wine_gm_runtime)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	runner_path = str(bashresult.stdout)[2:-3]
+
+	runner64_path = ""
+	bashresult = subprocess.run(["find \"{}\" -type f -name \"Runner.exe\" | head -2 | grep x64".format(wine_gm_runtime_path + wine_gm_runtime)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	runner64_path = str(bashresult.stdout)[2:-3]
+
 	macros = {
 		"asset_compiler_cache_directory" : "{}:{}/drive_c/users/gmbuild/cache/ide".format(wine_local_drive, wine_path_mod),
 		"project_cache_directory_name" : system_project_name,
 		"project_name" : system_project_name,
-		"asset_compiler_path" : "{}:{}/drive_c/ProgramData/GameMakerStudio2/Cache/runtimes/{}/bin/GMAssetCompiler.exe".format(wine_local_drive, wine_path_mod, wine_gm_runtime),
-		"runner_path" : "{}:{}/drive_c/ProgramData/GameMakerStudio2/Cache/Runtimes/{}/windows/Runner.exe".format(wine_local_drive, wine_path_mod, wine_gm_runtime),
-		"x64_runner_path" : "{}:{}/drive_c/ProgramData/GameMakerStudio2/Cache/Runtimes/{}/windows/x64/Runner.exe".format(wine_local_drive, wine_path_mod, wine_gm_runtime),
+		"asset_compiler_path" : "{}:{}".format(wine_local_drive, gmac_path),
+		"runner_path" : "{}:{}".format(wine_local_drive, runner_path),
+		"x64_runner_path" : "{}:{}".format(wine_local_drive, runner_path),
 	}
 	return macros
 
@@ -179,7 +192,7 @@ def find_gm_user_dir(history):
 	bashresult = subprocess.run(["find \"{}\" -name \"Manifest.enc\" | head -1".format(wine_path_mod)],shell=True,stdout=subprocess.PIPE);
 	wine_gm_user_dir = str(bashresult.stdout)[2:-3].replace("/Manifest.enc", "")
 	if bashresult.returncode == 1 or len(wine_gm_user_dir.strip()) <= 2:
-		history.append("[!] failed to locate GameMaker user login data! {}");
+		history.append("[!] failed to locate GameMaker user login data!");
 		wine_gm_user_dir = ""
 		return
 
@@ -380,10 +393,17 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 		wine_path_mod = wine_path.replace("$USER", system_user, 1)
 		bff_path = "{}:{}/drive_c/users/gmbuild/build.bff".format(wine_local_drive, wine_path_mod)
 
-	bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, wine_gm_runtime_path + wine_gm_runtime + "/bin/Igor.exe", bff_path)
+	igorpath = ""
+	bashresult = subprocess.run(["find \"{}\" -type f -name \"Igor.exe\" | head -1".format(wine_gm_runtime_path + wine_gm_runtime)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	igorpath = str(bashresult.stdout)[2:-3]
+	if bashresult.returncode == 1 or len(wine_gm_user_dir.strip()) <= 2:
+		output_history.append("[!] failed to find Igor.exe!")
+		return
+
+	bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
 	process = subprocess.Popen([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
-	asyncprocess = AsyncRead(process.stdout)
+	asyncprocess = AsyncRead(process.stderr)
 
 	stdscr.nodelay(True)
 	lastchar = 0
