@@ -55,7 +55,7 @@ class AsyncRead:
 
 # Global variables:
 command_list = ["exit", "quit", "print runtimes", "set gm runtime", "set gamemaker runtime", "set debug", "build wine", 
-		"set wine drive", "set wine prefix", "set gamemaker project", "set gm project", "clean wine",
+		"set wine drive", "set wine prefix", "set gamemaker project", "set gm project", "clean wine build",
 		"build wine existing", "kill wineserver", "export autoload", "set gm config", "set gamemaker config"]
 for i in range(0, len(command_list)):
 	command_list.append("help " + command_list[i])
@@ -541,22 +541,18 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 				output_history.insert(paused_start_index, "[!] failed to dump log!")
 		elif lastchar == ord('x'):
 			instance_count += 1
-#			try:
-			if True:
+			try:
 
 				wine_path_mod = wine_path.replace("$USER", system_user, 1)
 				runpath = ""
 				bashresult = subprocess.run(["find \"{}\" -type f -name \"Runner.exe\" | head -1".format(wine_gm_runtime_path + wine_gm_runtime)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 				runpath = str(bashresult.stdout)[2:-3]
 				bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -game \"{}\"".format(wine_path, runpath, cache_bff_data["compile_output_file_name"])
-				paused_start_index += 1
-				output_history.insert(paused_start_index, bashscript)
 				process = subprocess.Popen([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 				asyncprocess_list.append(AsyncRead(process))
 				paused_start_index += 1
 				output_history.insert(paused_start_index, "[!] launched game instance {}".format(instance_count))
-#			except:
-			if False:
+			except:
 				paused_start_index += 1
 				output_history.insert(paused_start_index, "[!] failed to launch new instance!")
 				instance_count -= 1
@@ -967,7 +963,7 @@ def curses_main(stdscr):
 							window_run_wine(stdscr, "running program...", output_history, inputstr_lower.find("existing") >= 0)
 							stdscr.clear()
 							continue
-				elif get_is_regex_command(inputstr_lower, "clean wine"):
+				elif get_is_regex_command(inputstr_lower, "clean wine build"):
 					if is_help:
 						output_history.append("[!] info:")
 						output_history.append("deletes all cached GameMaker builds and build files")
