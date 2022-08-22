@@ -78,6 +78,8 @@ system_project_name = ""
 wine_gm_config = "Default"
 wine_gm_config_index = 0
 
+cache_bff_data = {}
+
 	# GameMaker doesn't follow the JSON spec so we need to remove some
 	# extra commas or else the JSON parser crashes. Could use YAML but... eh.
 def json_strip_dead_commas(string):
@@ -110,6 +112,7 @@ def get_is_regex_command(str, command):
 
 # Creates directories / files w/ default values
 def write_default_files():
+	global cache_bff_data
 	# Generate base WINE project folder:
 	subprocess.run(["mkdir {}/drive_c/users/gmbuild".format(wine_path)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 	subprocess.run(["mkdir {}/drive_c/users/gmbuild/cache".format(wine_path)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -120,7 +123,8 @@ def write_default_files():
 	wine_path_mod = wine_path.replace("$USER", system_user, 1)
 
 	with open("{}/drive_c/users/gmbuild/build.bff".format(wine_path_mod), "w") as file:
-		file.write(json.dumps(generate_bff(), indent=4))
+		cache_bff_data = generate_bff()
+		file.write(json.dumps(cache_bff_data, indent=4))
 		file.close()
 	with open("{}/drive_c/users/gmbuild/macros.json".format(wine_path_mod), "w") as file:
 		file.write(json.dumps(generate_macros(), indent=4))
@@ -393,9 +397,11 @@ def window_select_list(stdscr, titlebar, list, index=0):
 
 def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 	global wine_gm_runtime
+	global cache_bff_data
 	is_output_paused = False	# Used to allow reading outputy
 	paused_start_index = 0		# Only print until this index if output is paused
 	compile_start_index = len(output_history)	# Where to start if we dump
+	instance_count = 1	# Number of instances of the game
 	if use_existing:
 		bashscript = "find \"{}\" -name \"build.bff\" | head -1".format(wine_path)
 		result = subprocess.run([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -430,7 +436,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 	bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
 	process = subprocess.Popen([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
-	asyncprocess = AsyncRead(process.stdout)
+	asyncprocess_list = [AsyncRead(process.stdout)]
 
 	stdscr.nodelay(True)
 	lastchar = 0
@@ -446,7 +452,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 		while True:
 			try:
 				time_current = time.time()
-				line = asyncprocess.readline(1) # Timeout if no new input, otherwise async
+				line = asyncprocess_list[0].readline(1) # Timeout if no new input, otherwise async
 				if not line:
 					break
 
@@ -496,10 +502,14 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 		else:
 			hint += " | [P] pause output"
 
-		hint += " | [D] dump output"
+		hint2 = "  [D] dump output    "
+		hint2 += " | [X] launch instance {}".format(instance_count + 1)
+
 		try:
-			addstr(stdscr, height - 1, 0, hint)
-			addstr(stdscr, height - 1, len(hint), " " * (width - len(hint)))
+			addstr(stdscr, height - 2, 0, hint)
+			addstr(stdscr, height - 2, len(hint), " " * (width - len(hint)))
+			addstr(stdscr, height - 1, 0, hint2)
+			addstr(stdscr, height - 1, len(hint2), " " * (width - len(hint2)))
 		except:
 			stdscr.refresh()
 			height, width = stdscr.getmaxyx()
@@ -529,9 +539,30 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 				output_history.insert(paused_start_index, "[!] dumped output to ~/dump.log")
 			except:
 				output_history.insert(paused_start_index, "[!] failed to dump log!")
+		elif lastchar == ord('x'):
+			instance_count += 1
+#			try:
+			if True:
+
+				wine_path_mod = wine_path.replace("$USER", system_user, 1)
+				runpath = ""
+				bashresult = subprocess.run(["find \"{}\" -type f -name \"Runner.exe\" | head -1".format(wine_gm_runtime_path + wine_gm_runtime)],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+				runpath = str(bashresult.stdout)[2:-3]
+				bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -game \"{}\"".format(wine_path, runpath, cache_bff_data["compile_output_file_name"])
+				paused_start_index += 1
+				output_history.insert(paused_start_index, bashscript)
+				process = subprocess.Popen([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+				asyncprocess_list.append(AsyncRead(process))
+				paused_start_index += 1
+				output_history.insert(paused_start_index, "[!] launched game instance {}".format(instance_count))
+#			except:
+			if False:
+				paused_start_index += 1
+				output_history.insert(paused_start_index, "[!] failed to launch new instance!")
+				instance_count -= 1
 
 		# Output history (and thus incoming terminal info):
-		print_history(stdscr, output_history, paused_start_index)
+		print_history(stdscr, output_history, paused_start_index, -1)
 
 		stdscr.move(0, width - 1)
 		stdscr.refresh()
@@ -544,14 +575,16 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 	# Trigger killing the wineserver if not already killed:
 	subprocess.run(["wineserver -k"], shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 	# Tell the iothread to die and wait until it closes:
-	asyncprocess.terminate()
+	for thread in asyncprocess_list:
+		thread.terminate()
+
 	output_history.append("[!] WINE server killed...")
 	stdscr.nodelay(False)
 	return
 
-def print_history(stdscr, output_history, start_index=-1):
+def print_history(stdscr, output_history, start_index=-1, yoff=0):
 	height, width = stdscr.getmaxyx()
-	output_history_y = height - 2
+	output_history_y = height - 2 + yoff
 
 	if start_index < 0:
 		start_index += len(output_history)
@@ -719,8 +752,8 @@ def curses_main(stdscr):
 		else:
 			output_history.append("[!] no GameMaker projects found!")
 
+	output_history.append("config set to {}".format(wine_gm_config))
 	if is_autoload:
-		output_history.append("set config to {}".format(wine_gm_config))
 		wine_gm_runtime_index = 0
 		output_history.append("finished performing autoload, to prevent this in the future delete ~/.gmbuild_autoload")
 
@@ -899,9 +932,11 @@ def curses_main(stdscr):
 								system_project_path = project_list[project_path_index]
 								system_project_name = re.findall("/[a-zA-Z.\\s0-9-]+\.yyp$", system_project_path)[0][1:-4]
 								system_project_directory = system_project_path.replace(system_project_name + "yyp", "")
+								wine_gm_config = "Default"
+								wine_gm_config_index = 0
 								output_history.append("project set to {}".format(system_project_name))
 							except:
-								output_history.append("[!] error processing project name (invalid characters?")
+								output_history.append("[!] error processing project name (invalid characters?)")
 						else:
 							output_history.append("[!] no GameMaker projects found!")
 				elif get_is_regex_command(inputstr_lower, "kill wineserver"):
