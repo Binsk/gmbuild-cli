@@ -518,10 +518,10 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 
 		# Handle 'close' input
 		break_loop = False
-		if lastchar == ord('q'):
+		if lastchar == ord('q') or lastchar == ord('Q'):
 			break_loop = True
 			output_history.append("killing WINE server...")
-		elif lastchar == ord('p'):
+		elif lastchar == ord('p') or lastchar == ord('P'):
 			output_history.append("[!] output paused, WINE server running in the background...")
 			is_output_paused = not is_output_paused
 			paused_start_index = len(output_history) - 1 # Account for just appended line
@@ -529,7 +529,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 		if not is_output_paused:
 			paused_start_index = len(output_history) - 1
 
-		if lastchar == ord('d'):
+		if lastchar == ord('d') or lastchar == ord('D'):
 			paused_start_index += 1
 			try:
 				file = open("/home/{}/dump.log".format(system_user), "w")
@@ -539,7 +539,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 				output_history.insert(paused_start_index, "[!] dumped output to ~/dump.log")
 			except:
 				output_history.insert(paused_start_index, "[!] failed to dump log!")
-		elif lastchar == ord('x'):
+		elif lastchar == ord('x') or lastchar == ord('X'):
 			instance_count += 1
 			try:
 
