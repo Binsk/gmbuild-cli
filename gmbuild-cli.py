@@ -242,14 +242,14 @@ def get_best_command_match(command):
 
 def scan_wine_data(history):
 	# Scan for GameMaker executable:
-	bashresult = subprocess.run(["find \"{}\" -regextype posix-egrep -type f -regex \".*/GameMaker(Studio)?\\.exe\" | head -1".format(wine_path)],shell=True,stdout=subprocess.PIPE);
+	bashresult = subprocess.run(["find \"{}\" -regextype posix-egrep -type f -regex \".*/GameMaker(Studio|-LTS)?\\.exe\" | head -1".format(wine_path)],shell=True,stdout=subprocess.PIPE);
 	global wine_gm_path
 	wine_gm_path = str(bashresult.stdout)[2:-3]
 	if bashresult.returncode == 1 or len(wine_gm_path.strip()) <= 2:
-		history.append("[!] GameMakerStudio.exe not found!")
+		history.append("[!] GameMaker executable not found!")
 		wine_gm_path = ""
 	else:
-		history.append("GameMakerStudio.exe located at {}".format(wine_gm_path));
+		history.append("GameMaker executable located at {}".format(wine_gm_path));
 
 def get_prefix_list():
 	bashresult = subprocess.run(["find \"/home/{}\" -type d -name \"drive_c\"".format(system_user)],shell=True,stdout=subprocess.PIPE)
@@ -569,7 +569,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 		lastchar = stdscr.getch()
 
 	# Trigger killing the wineserver if not already killed:
-	subprocess.run(["wineserver -k"], shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	subprocess.run(["env WINEPREFIX=\"{}\" wineserver -k".format(wine_path)], shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 	# Tell the iothread to die and wait until it closes:
 	for thread in asyncprocess_list:
 		thread.terminate()
