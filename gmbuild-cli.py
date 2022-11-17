@@ -77,6 +77,7 @@ system_project_path = ""
 system_project_name = ""
 wine_gm_config = "Default"
 wine_gm_config_index = 0
+wine_gm_lts_suffix = ""
 
 cache_bff_data = {}
 
@@ -165,6 +166,7 @@ def generate_macros():
 def generate_bff():
 	global wine_gm_runtime
 	global wine_local_drive
+	global wine_gm_lts_suffix
 	wine_path_mod = wine_path.replace("$USER", system_user, 1)
 	json = {
 		"targetFile": "",
@@ -184,7 +186,7 @@ def generate_bff():
 		"tempFolder": "{}:{}/drive_c/users/gmbuild/temp".format(wine_local_drive, wine_path_mod),
 		"tempFolderUnmapped": "{}:{}/drive_c/users/gmbuild/temp".format(wine_local_drive, wine_path_mod),
 		"userDir" : wine_gm_user_dir,
-		"runtimeLocation": "{}:{}/drive_c/ProgramData/GameMakerStudio2/Cache/Runtimes/{}".format(wine_local_drive, wine_path_mod, wine_gm_runtime),
+		"runtimeLocation": "{}:{}/drive_c/ProgramData/GameMakerStudio2{}/Cache/Runtimes/{}".format(wine_local_drive, wine_path_mod, wine_gm_lts_suffix, wine_gm_runtime),
 		"targetOptions" : "{}:{}/drive_c/users/gmbuild/targetoptions.json".format(wine_local_drive, wine_path_mod),
 		"targetMask": "64",
 		"applicationPath": "{}:{}".format(wine_local_drive, wine_gm_path),
@@ -244,12 +246,17 @@ def scan_wine_data(history):
 	# Scan for GameMaker executable:
 	bashresult = subprocess.run(["find \"{}\" -regextype posix-egrep -type f -regex \".*/GameMaker(Studio|-LTS)?\\.exe\" | head -1".format(wine_path)],shell=True,stdout=subprocess.PIPE);
 	global wine_gm_path
+	global wine_gm_lts_suffix
 	wine_gm_path = str(bashresult.stdout)[2:-3]
 	if bashresult.returncode == 1 or len(wine_gm_path.strip()) <= 2:
 		history.append("[!] GameMaker executable not found!")
 		wine_gm_path = ""
 	else:
 		history.append("GameMaker executable located at {}".format(wine_gm_path));
+		if "-LTS" in wine_gm_path:
+			wine_gm_lts_suffix = "-LTS"
+		else:
+			wine_gm_lts_suffix = ""
 
 def get_prefix_list():
 	bashresult = subprocess.run(["find \"/home/{}\" -type d -name \"drive_c\"".format(system_user)],shell=True,stdout=subprocess.PIPE)
@@ -434,9 +441,11 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 		return
 
 	bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
+#	bashscript = "env WINEPREFIX=\"{}\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
 	process = subprocess.Popen([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
 	asyncprocess_list = [AsyncRead(process.stdout)]
+#	asyncprocess_list = [AsyncRead(process.stderr)]
 
 	stdscr.nodelay(True)
 	lastchar = 0
@@ -644,6 +653,7 @@ def import_autoload():
 	global wine_local_drive
 	global wine_gm_runtime
 	global wine_gm_config
+	global wine_gm_lts_suffix
 	try:
 		file = open("/home/{}/.gmbuild_autoload".format(system_user))
 		content = file.read()
@@ -656,6 +666,7 @@ def import_autoload():
 		wine_gm_debug_mode = data["debug"]
 		wine_local_drive = data["drive"]
 		wine_gm_config = data["config"]
+		wine_gm_lts_suffix = data["lts"]
 	except:
 		return False
 
@@ -673,6 +684,7 @@ def curses_main(stdscr):
 	global system_project_path
 	global wine_gm_config
 	global wine_gm_config_index
+	global wine_gm_lts_suffix
 
 	lastchar = 0
 	inputstr = ""
@@ -984,7 +996,8 @@ def curses_main(stdscr):
 								"rt" : wine_gm_runtime,
 								"debug" : wine_gm_debug_mode,
 								"drive" : wine_local_drive,
-								"config" : wine_gm_config
+								"config" : wine_gm_config,
+								"lts" : wine_gm_lts_suffix
 							}
 							file = open("/home/{}/.gmbuild_autoload".format(system_user), "w")
 							file.write(json.dumps(data))
