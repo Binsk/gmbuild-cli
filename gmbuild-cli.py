@@ -170,6 +170,10 @@ def generate_bff():
 	global wine_local_drive
 	global wine_gm_lts_suffix
 	wine_path_mod = wine_path.replace("$USER", system_user, 1)
+	wine_gm_path_mod = wine_gm_path
+	# If newer runtimes, we need to launch the DLL not the EXE
+	if re.compile("^runtime-\d{4}\.").match(wine_gm_runtime):
+		wine_gm_path_mod = wine_gm_path_mod[0:-4] + ".dll"
 	json = {
 		"targetFile": "",
 		"assetCompiler": "",
@@ -191,7 +195,7 @@ def generate_bff():
 		"runtimeLocation": "{}:{}/drive_c/ProgramData/GameMakerStudio2{}/Cache/Runtimes/{}".format(wine_local_drive, wine_path_mod, wine_gm_lts_suffix, wine_gm_runtime),
 		"targetOptions" : "{}:{}/drive_c/users/gmbuild/targetoptions.json".format(wine_local_drive, wine_path_mod),
 		"targetMask": "64",
-		"applicationPath": "{}:{}".format(wine_local_drive, wine_gm_path),
+		"applicationPath": "{}:{}".format(wine_local_drive, wine_gm_path_mod),
 		"verbose": "False",
 		"SteamIDE": "False",
 		"helpPort": "51290",
@@ -449,6 +453,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 	else:
 		bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
 
+	output_history.append("executing: \"{}\" -options={} -v -- Windows Run".format(igorpath, bff_path))
 	process = subprocess.Popen([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
 	if wine_output_errors:
