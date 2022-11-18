@@ -56,7 +56,8 @@ class AsyncRead:
 # Global variables:
 command_list = ["exit", "quit", "print runtimes", "set gm runtime", "set gamemaker runtime", "set debug", "build wine", 
 		"set wine drive", "set wine prefix", "set gamemaker project", "set gm project", "clean wine build",
-		"build wine existing", "kill wineserver", "export autoload", "set gm config", "set gamemaker config"]
+		"build wine existing", "kill wineserver", "export autoload", "set gm config", "set gamemaker config",
+		"set wine print errors"]
 for i in range(0, len(command_list)):
 	command_list.append("help " + command_list[i])
 command_list.append("help")
@@ -78,6 +79,7 @@ system_project_name = ""
 wine_gm_config = "Default"
 wine_gm_config_index = 0
 wine_gm_lts_suffix = ""
+wine_output_errors = False
 
 cache_bff_data = {}
 
@@ -405,6 +407,8 @@ def window_select_list(stdscr, titlebar, list, index=0):
 def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 	global wine_gm_runtime
 	global cache_bff_data
+	global wine_output_errors
+
 	is_output_paused = False	# Used to allow reading outputy
 	paused_start_index = 0		# Only print until this index if output is paused
 	compile_start_index = len(output_history)	# Where to start if we dump
@@ -440,12 +444,17 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 		output_history.append("[!] failed to find Igor.exe!")
 		return
 
-	bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
-#	bashscript = "env WINEPREFIX=\"{}\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
+	if wine_output_errors:
+		bashscript = "env WINEPREFIX=\"{}\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
+	else:
+		bashscript = "env WINEPREFIX=\"{}\" env WINEDEBUG=\"warn-all,fixme-all,trace-all,err-all\" wine \"{}\" -options={} -v -- Windows Run".format(wine_path, igorpath, bff_path)
+
 	process = subprocess.Popen([bashscript],shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
-	asyncprocess_list = [AsyncRead(process.stdout)]
-#	asyncprocess_list = [AsyncRead(process.stderr)]
+	if wine_output_errors:
+		asyncprocess_list = [AsyncRead(process.stdout), AsyncRead(process.stderr)]
+	else:
+		asyncprocess_list = [AsyncRead(process.stdout)]
 
 	stdscr.nodelay(True)
 	lastchar = 0
@@ -453,6 +462,7 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 
 	last_height = 0
 	last_width = 0
+	last_err_line = ""	# Simply for preventing wineserver spam
 
 	while True:
 		line_array = []
@@ -470,6 +480,22 @@ def window_run_wine(stdscr, titlebar, output_history, use_existing=False):
 					break
 			except:
 				break
+		if wine_output_errors:
+			while True:
+				try:
+					line = asyncprocess_list[1].readline(1) # Timeout if no new input, otherwise async
+					if not line:
+						break
+
+					if line == last_err_line:
+						continue
+
+					last_err_line = line
+					line_array.append("[!] " + str(line)[2:-3])
+					if time_current - time_last >= 0.1:
+						break
+				except:
+					break
 
 		time_last = time.time() # MS, update every 100
 		for line in line_array:
@@ -654,6 +680,7 @@ def import_autoload():
 	global wine_gm_runtime
 	global wine_gm_config
 	global wine_gm_lts_suffix
+	global wine_output_errors
 	try:
 		file = open("/home/{}/.gmbuild_autoload".format(system_user))
 		content = file.read()
@@ -667,6 +694,7 @@ def import_autoload():
 		wine_local_drive = data["drive"]
 		wine_gm_config = data["config"]
 		wine_gm_lts_suffix = data["lts"]
+		wine_output_errors = data["perror"]
 	except:
 		return False
 
@@ -685,6 +713,7 @@ def curses_main(stdscr):
 	global wine_gm_config
 	global wine_gm_config_index
 	global wine_gm_lts_suffix
+	global wine_output_errors
 
 	lastchar = 0
 	inputstr = ""
@@ -899,6 +928,13 @@ def curses_main(stdscr):
 					else:
 						wine_gm_debug_mode = window_select_list(stdscr, "debug mode", ["disabled", "enabled"], wine_gm_debug_mode)
 						output_history.append("debug mode {}".format("enabled" if wine_gm_debug_mode == 1 else "disabled"))
+				elif get_is_regex_command(inputstr_lower, "set wine print errors"):
+					if is_help:
+						output_history.append("[!] info:")
+						output_history.append("prints out wineserver errors while the project is running")
+					else:
+						wine_output_errors = window_select_list(stdscr, "print wineserver errors", ["False", "True"], wine_output_errors)
+						output_history.append("wineserver errors {}".format("enabled" if wine_output_errors == 1 else "disabled"))
 				elif get_is_regex_command(inputstr_lower, "set wine drive"):
 					if is_help:
 						output_history.append("[!] info:")
@@ -997,7 +1033,8 @@ def curses_main(stdscr):
 								"debug" : wine_gm_debug_mode,
 								"drive" : wine_local_drive,
 								"config" : wine_gm_config,
-								"lts" : wine_gm_lts_suffix
+								"lts" : wine_gm_lts_suffix,
+								"perror" : wine_output_errors
 							}
 							file = open("/home/{}/.gmbuild_autoload".format(system_user), "w")
 							file.write(json.dumps(data))
