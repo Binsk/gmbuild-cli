@@ -1,3 +1,7 @@
+# NOTICE
+
+This project is effectively now unmaintained due to a GameMaker change that broke WINE compatability combined with an official Linux build of GameMaker now being provided.
+
 # ABOUT
 
 GMBuild-CLI is a tool that allows compiling GameMaker projects targeted for Windows on Linux through WINE. It requires that you have GameMaker installed, set up, and logged in through WINE. Once this is accomplished GMBuild-CLI will automatically scan for runtimes and login data to allow compiling through the terminal without having the editor open. Paired with GMEdit this makes for a solid workflow.
